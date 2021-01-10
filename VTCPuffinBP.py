@@ -19,6 +19,8 @@ import OpenRTM_aist
 import zmq
 import math
 import json
+import time
+
 
 # Import Service implementation class
 # <rtc-template block="service_impl">
@@ -237,6 +239,15 @@ class VTCPuffinBP(OpenRTM_aist.DataFlowComponentBase):
 		sock.connect(address)
 		self.sock = sock
 		print("finish activation")
+		self.odometry = {
+			"x": 0,
+			"y": 0,
+			"heading": 0
+		}
+		self.avg_exec_sec = 0.006  # initial average execution second, delta time
+		self.run_times = []
+		self.start_time = 0
+		self.end_time = 0
 		return RTC.RTC_OK
 
 	###
@@ -264,8 +275,8 @@ class VTCPuffinBP(OpenRTM_aist.DataFlowComponentBase):
 	#
 	#
 	def onExecute(self, ec_id):
+		self.start_time = time.time()
 		if self._targetVelocityIn.isNew():
-			
 			timed_velocity2d_in = self._targetVelocityIn.read()
 			input_velocity2d = timed_velocity2d_in.data
 			os = {
@@ -288,7 +299,17 @@ class VTCPuffinBP(OpenRTM_aist.DataFlowComponentBase):
 			res = self.sock.recv()
 			dict_res = json.loads(res)
 			assert dict_res["Result"] == "OK"
+			print(dict_res)
 
+			self._d_currentPose.data.heading += input_velocity2d.va * self.avg_exec_sec
+			self._d_currentPose.data.position.x += input_velocity2d.vx * math.cos(input_velocity2d.va) * self.avg_exec_sec
+			self._d_currentPose.data.position.y += input_velocity2d.vx * math.sin(input_velocity2d.va) * self.avg_exec_sec
+			self._currentPoseOut.write()
+
+		self.end_time = time.time() - self.start_time
+		self.run_times.append(self.end_time)
+		self.avg_exec_sec = sum(self.run_times[-10:]) / len(self.run_times[-10:])
+		print(f"average execution time: {self.avg_exec_sec}")
 		return RTC.RTC_OK
 
 	###
