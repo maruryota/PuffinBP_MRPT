@@ -300,10 +300,35 @@ class VTCPuffinBP(OpenRTM_aist.DataFlowComponentBase):
 			dict_res = json.loads(res)
 			assert dict_res["Result"] == "OK"
 			print(dict_res)
+			
+			vx = input_velocity2d.vx
+			va = input_velocity2d.va
+			dt = self.avg_exec_sec
+			th = self._d_currentPose.data.heading
 
-			self._d_currentPose.data.heading += input_velocity2d.va * self.avg_exec_sec
-			self._d_currentPose.data.position.x += input_velocity2d.vx * math.cos(input_velocity2d.va) * self.avg_exec_sec
-			self._d_currentPose.data.position.y += input_velocity2d.vx * math.sin(input_velocity2d.va) * self.avg_exec_sec
+			fai = va * dt
+			if math.fabs(va) < 0.0000001:
+				dx = vx * dt
+				dy = 0
+			else:
+				R = vx / va
+				dx = R * math.sin(fai)
+				dy = R - R * math.cos(fai)
+			
+			dx_abs = dx * math.cos(th) - dy * math.sin(th)
+			dy_abs = dx * math.sin(th) + dy * math.cos(th)
+			th = th + fai
+			if th > math.pi: th = th - math.pi*2
+			elif th < -math.pi: th = th + math.pi*2
+			self._d_currentPose.data.heading = th
+			self._d_currentPose.data.position.x += dx_abs
+			self._d_currentPose.data.position.y += dy_abs
+
+
+			
+			# self._d_currentPose.data.heading += input_velocity2d.va * self.avg_exec_sec
+			# self._d_currentPose.data.position.x += input_velocity2d.vx * math.cos(input_velocity2d.va) * self.avg_exec_sec
+			# self._d_currentPose.data.position.y += input_velocity2d.vx * math.sin(input_velocity2d.va) * self.avg_exec_sec
 			self._currentPoseOut.write()
 
 		self.end_time = time.time() - self.start_time
